@@ -1,3 +1,8 @@
+> **FRS-AntiESP is a fork of [RaycastedAntiESP](https://github.com/Cubicake/RaycastedAntiESP) by Cubicake.**
+> The original plugin is copyright © 2025-2026 Cubicake and Contributors and is licensed under the AGPL-3.0-only.
+> This fork keeps that license, and its complete source is in this repository.
+> Everything below is the upstream README.
+
 RaycastedAntiESP is a packet-based plugin for Paper, Folia, and its forks that hides entities (including players) and tile entities (blocks such as chests, banners, signs, etc) from players if they would not be visible to a legitimate player. It is **unbypassable** by design, as packets sent by the server are blocked from reaching the client unless the block/entity has been confirmed to be visible.
 This limits the usefulness of unfair advantages such as cheat clients, freecam, and x-ray, and completely blocks pie-ray.
 
