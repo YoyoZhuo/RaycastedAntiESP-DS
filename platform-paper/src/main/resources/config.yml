@@ -1,0 +1,171 @@
+# An explanation of this configuration file and what the options do can be found at https://raycastedantiesp.cubi.games/config/
+config-version: '2.0'
+checks:
+    # Restricts every check below to a subset of your worlds. Worlds are named as they appear in your server folder
+    # (the same name /execute in and most plugins use), not as dimension types.
+    # Changing these values requires a server restart, as with the per-check "enabled" options.
+    worlds:
+        # "blacklist": checks run in every world EXCEPT those listed below. An empty list means every world is checked.
+        # "whitelist": checks run ONLY in the worlds listed below. An empty list means no world is checked.
+        mode: whitelist
+        # Worlds where ESP protection is unnecessary usually make good blacklist entries, for example a lobby,
+        # a creative build world, or a minigame world where everyone is meant to see everyone.
+        # Add entries with "/antiesp add checks.worlds.list <world>", or list them here as "- <world>".
+        # Keep this as [] rather than deleting it when empty, so the add command can still find the path.
+        list:
+        - gun1
+        - gun3
+    # Traces from where a moving viewer is about to be rather than where they are, so a target appears on the tick
+    # the viewer reaches the line of sight instead of the tick after. This mostly cancels the delay the plugin itself
+    # adds: it notices the new position on the next engine tick, and the show packet goes out after that.
+    #
+    # This deliberately trades strictness for responsiveness, and the trade is exploitable. A viewer who sprints at a
+    # corner is shown what is behind it slightly before they get line of sight, so they can peek and back off without
+    # ever exposing themselves. A minimum speed does not prevent this, because sprinting already meets it. Keep
+    # ticks-ahead as low as you can live with, and leave this disabled if you want the strict guarantee.
+    #
+    # Prediction can only ever reveal a target earlier, never hide one later: the current position is always traced
+    # first, and the predicted position is only tried when that says hidden.
+    viewer-prediction:
+        enabled: false
+        # Blocks per tick the viewer must be travelling before their position is extrapolated. Measured as total
+        # movement including vertical, so jumping and falling count towards it. For reference: sneaking is about
+        # 0.07, walking 0.22, sprinting 0.28 and sprint-jumping 0.36. The default of 0.15 therefore covers walking
+        # and above; raise it to about 0.25 to extrapolate only for players who are actually sprinting.
+        # Movement above 2.0 is treated as a teleport or knockback and is never extrapolated.
+        min-speed-blocks-per-tick: 0.15
+        # How many ticks ahead to extrapolate. Each tick is 50ms and about 0.28 blocks at sprinting speed. Above 2 the
+        # straight line assumption stops holding for players who turn, and mispredictions leak more.
+        ticks-ahead: 1
+    player:
+        enabled: true
+        hide-sounds-when-hidden: true
+        max-occluding-count: 3
+        always-show-radius: 8
+        raycast-radius: 128
+        hide-on-spawn-distance: 24
+        # Distance in blocks between occlusion samples along a ray. Lower values cost proportionally more to trace
+        # (0.5 is roughly twice the work of 1.0) but make max-occluding-count a finer threshold: a ray must cross
+        # about max-occluding-count * raycast-step-size blocks of occluding material to hide the target.
+        # The finer resolution lets a threshold above one sample ignore a ray that only clips the corner of a block,
+        # which produces far fewer samples than crossing it, while a real wall still trips the threshold.
+        # For example 0.5 with max-occluding-count 2 keeps the same one block threshold as the 1.0 default, but a
+        # corner clip no longer counts as a full block. Counts and step sizes that do not multiply to a whole number,
+        # such as 0.5 with a count of 3, give thresholds that a one block step cannot express at all.
+        raycast-step-size: 1.0
+        visible-recheck-interval-ticks: 5  # -1 disables visible rechecks. When set to -1, once an entity is shown by any mechanism, it will be permanently visible.
+        keep-client-entity-when-hidden: false
+        only-check-sneaking: true
+    entity:
+        enabled: true
+        hide-sounds-when-hidden: true
+        max-occluding-count: 3
+        always-show-radius: 8
+        raycast-radius: 92
+        hide-on-spawn-distance: 24
+        # Distance in blocks between occlusion samples along a ray. Lower values cost proportionally more to trace
+        # (0.5 is roughly twice the work of 1.0) but make max-occluding-count a finer threshold: a ray must cross
+        # about max-occluding-count * raycast-step-size blocks of occluding material to hide the target.
+        # The finer resolution lets a threshold above one sample ignore a ray that only clips the corner of a block,
+        # which produces far fewer samples than crossing it, while a real wall still trips the threshold.
+        # For example 0.5 with max-occluding-count 2 keeps the same one block threshold as the 1.0 default, but a
+        # corner clip no longer counts as a full block. Counts and step sizes that do not multiply to a whole number,
+        # such as 0.5 with a count of 3, give thresholds that a one block step cannot express at all.
+        raycast-step-size: 1.0
+        visible-recheck-interval-ticks: 5 # -1 disables visible rechecks. When set to -1, once an entity is shown by any mechanism, it will be permanently visible.
+        keep-client-entity-when-hidden: false
+        excluded-types:
+            # Projectiles move very quickly, giving limited time for the raycast engine to process them. This could cause the player not to have enough time to dodge the projectile, so they are always visible by default.
+            - minecraft:arrow
+            - minecraft:spectral_arrow
+            - minecraft:fireball
+            - minecraft:dragon_fireball
+            - minecraft:small_fireball
+            - minecraft:firework_rocket
+            - minecraft:wither_skull
+            - minecraft:breeze_wind_charge
+            - minecraft:wind_charge
+            - minecraft:ender_pearl
+            - minecraft:evoker_fangs
+            - minecraft:shulker_bullet
+
+            # Potions and area effect clouds can damage players even if not visible. A reasonable always-show-radius mitigates these issues, so exempting these entities is not necessary.
+            # If your server relies on potion pvp where knowing the exact number of potions someone else has used is an unfair advantage, you may want to un-exempt these entities.
+            - minecraft:area_effect_cloud
+            - minecraft:lingering_potion
+            - minecraft:splash_potion
+            - minecraft:potion # Note: the "potion" entity was removed in 1.21.5 and replaced with "splash_potion" and "lingering_potion". If you are on 1.21.4, you can comment out the above two entry. If you are on 1.21.5+ you should instead comment out this entry.
+
+            # Lightning is short-lived and expected to be visible to people who cannot see the block being struck.
+            - minecraft:lightning_bolt
+
+            - minecraft:ender_dragon
+            - minecraft:wither
+            - minecraft:warden
+
+            # These entities are not seen in normal gameplay, and are usually part of custom mechanics.
+            # If you un-exempt these entities, it is likely that other plugins (such as hologram or NPC plugins) will break.
+            - minecraft:block_display
+            - minecraft:text_display
+            - minecraft:item_display
+            - minecraft:interaction
+            - minecraft:mannequin
+            # Falling blocks are often used in custom mechanics, especially by plugins made before display entities were added to the game.
+            # Therefore, exempting them can make sense. However, falling blocks also occur in regular gameplay,
+            # and can provide insight about players which are not visible.
+            # Therefore, falling blocks are not exempted by default.
+            #- minecraft:falling_block
+
+            # You can add more excluded types using the name for the entity which would be used by the /summon <entity> command, adding "- <entity>" to the list above.
+    tile-entity:
+        enabled: true
+        max-occluding-count: 3
+        always-show-radius: 8
+        raycast-radius: 64
+        hide-on-spawn-distance: 24
+        # Distance in blocks between occlusion samples along a ray. Lower values cost proportionally more to trace
+        # (0.5 is roughly twice the work of 1.0) but make max-occluding-count a finer threshold: a ray must cross
+        # about max-occluding-count * raycast-step-size blocks of occluding material to hide the target.
+        # The finer resolution lets a threshold above one sample ignore a ray that only clips the corner of a block,
+        # which produces far fewer samples than crossing it, while a real wall still trips the threshold.
+        # For example 0.5 with max-occluding-count 2 keeps the same one block threshold as the 1.0 default, but a
+        # corner clip no longer counts as a full block. Counts and step sizes that do not multiply to a whole number,
+        # such as 0.5 with a count of 3, give thresholds that a one block step cannot express at all.
+        raycast-step-size: 1.0
+        visible-recheck-interval-ticks: -1  # -1 disables visible rechecks. When set to -1, once an entity is shown by any mechanism, it will be permanently visible.
+    sound-effects:
+        enabled: false
+        max-occluding-count: 3
+        always-play-radius: 8
+        raycast-radius: 48
+    chunk-section:
+        enabled: false
+        max-occluding-count: 6
+        always-show-radius-chunks: 2
+        visible-recheck-interval-ticks: -1
+engine:
+    mode: async
+    async:
+        processing-threads: 1 # 1 thread is sufficient for hundreds of players, I do not recommend increasing this value blindly.
+    netty:
+block-processor:
+    mode: packetevents
+    track-all-blocks: false
+    packetevents:
+        tile-entity-exempted-ids:
+            #- 9779 - Beacon ID on 1.21.11. To see what the beacon ID is for your server version, run the command "/antiesp print-block-ids". This will dump a massive list of all the block ID to block name mappings in the console. Search your logs for "beacon" (or whatever other tile entity you'd like to exempt) and add the associated ID here
+        tile-entity-force-included-ids:
+debug:
+    info-level: 5
+    info-exempted-classes:
+    warn-level: 5
+    warn-exempted-classes:
+    error-level: 5
+    error-exempted-classes:
+    particles: false
+    timings: false
+updates:
+    check-release: true
+    check-beta: true
+    check-alpha: true
+    notify-in-game: true # When false, update checks only notify the console. When true, players with the correct permission are notified.
