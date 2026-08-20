@@ -46,10 +46,10 @@ Note that using external software to remove this command (for example by using a
 // 3. You may not remove this notice without providing an alternative **prominent** notice containing a link to the source code and the original copyright notice.
         */
 
-        sender.sendRichMessage("<white>This server runs a fork of <gold><click:open_url:'https://github.com/Cubicake/RaycastedAntiESP'>RaycastedAntiESP</click></gold> called FRS-AntiESP, a packet-based anti-esp plugin.\n" +
+        sender.sendRichMessage("<white>This server runs a modified build of <gold><click:open_url:'https://github.com/Cubicake/RaycastedAntiESP'>RaycastedAntiESP</click></gold>, a packet-based anti-esp plugin.\n" +
                 "\n" +
-                "<white>The original plugin is <dark_green>copyright © 2025-2026 Cubicake and Contributors</dark_green>, with this fork copyright © 2025-2026 YoyoZhuo. The plugin in its entirety is licenced under the <dark_green>AGPLv3 licence</dark_green>, which requires the source code to be available to all users of the plugin, including you. \n" +
-                "<white>As such, the source code can be found at <u><blue><hover:show_text:'Click to view source'><click:open_url:'https://github.com/YoyoZhuo/FRS-AntiESP'>https://github.com/YoyoZhuo/FRS-AntiESP</click></hover></blue></u>.");
+                "<white>The original plugin is <dark_green>copyright © 2025-2026 Cubicake and Contributors</dark_green>, with the modifications in this build made by YoyoZhuo in 2026. The plugin in its entirety is licenced under the <dark_green>AGPLv3 licence</dark_green>, which requires the source code to be available to all users of the plugin, including you. \n" +
+                "<white>As such, the source code for this modified build can be found at <u><blue><hover:show_text:'Click to view source'><click:open_url:'https://github.com/YoyoZhuo/RaycastedAntiESP-DS'>https://github.com/YoyoZhuo/RaycastedAntiESP-DS</click></hover></blue></u>.");
         sender.sendRichMessage("A copy of the AGPLv3 Licence can be found at <hover:show_text:'Click to view licence'><u><blue><click:open_url:'https://www.gnu.org/licenses/agpl-3.0.html'>https://www.gnu.org/licenses/agpl-3.0.html</click></blue></u></hover>.\n" +
                 "\n" +
                 "Disclaimer: This software is provided “as is”, without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.\n" +
@@ -58,7 +58,7 @@ Note that using external software to remove this command (for example by using a
                 "\n" +
                 "Plugin developers:\n" +
                 "- Cubicake (Sole developer, creator and maintainer of RaycastedAntiESP)\n" +
-                "- YoyoZhuo (Developer of the FRS-AntiESP fork)\n" +
+                "- YoyoZhuo (Modifications in this build, 2026)\n" +
                 "\n" +
                 "Libraries:\n" +
                 "- Strokkur424 and other contributors to <click:open_url:'https://github.com/Strokkur424/StrokkCommands'><u><hover:show_text:'Click to view Github repository'><blue>StrokkCommands</blue></hover></u></click>, an LGPL-licensed open-source annotation-based brigadier command tree generator.\n" +
