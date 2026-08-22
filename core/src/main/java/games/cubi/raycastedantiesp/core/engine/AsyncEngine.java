@@ -421,7 +421,7 @@ public abstract class AsyncEngine implements Engine {
         EntityView<?> entityView = player.entityView();
 
         int checked = entityView.forEachNeedingRecheckEntity(entityConfig.getVisibleRecheckIntervalTicks(), currentTick, !(timings instanceof TickTimingBatchNoOp), worldEpoch, entity -> {
-            if (entity.glowing()) {
+            if (entityConfig.alwaysShowGlowing() && entity.glowing()) {
                 entityView.setVisibility(entity, true, currentTick, worldEpoch);
                 return;
             }
@@ -444,7 +444,8 @@ public abstract class AsyncEngine implements Engine {
         EntityView<?> playerView = player.playerView();
 
         int checked = playerView.forEachNeedingRecheckEntity(playerConfig.getVisibleRecheckIntervalTicks(), currentTick, !(timings instanceof TickTimingBatchNoOp), worldEpoch, otherPlayer -> {
-            if (otherPlayer.glowing() || (playerConfig.onlyCheckSneaking() && !otherPlayer.sneaking())) {
+            if (playerConfig.alwaysShowGlowing() && otherPlayer.glowing()
+                    || (playerConfig.onlyCheckSneaking() && !otherPlayer.sneaking())) {
                 playerView.setVisibility(otherPlayer, true, currentTick, worldEpoch);
                 return;
             }

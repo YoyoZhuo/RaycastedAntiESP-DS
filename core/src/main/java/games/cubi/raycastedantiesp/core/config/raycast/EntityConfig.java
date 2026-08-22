@@ -20,7 +20,7 @@ public class EntityConfig extends RaycastConfig {
     private EntityConfig(RaycastConfig config, List<String> excludedTypes) {
         super(config.enabled(), config.hideSoundsWhenHidden(), config.getMaxOccludingCount(), config.getAlwaysShowRadius(),
                 config.getRaycastRadius(), config.hideOnSpawnDistance(), config.getVisibleRecheckIntervalTicks(),
-                config.keepClientEntityWhenHidden(), config.getRaycastStepSize());
+                config.keepClientEntityWhenHidden(), config.getRaycastStepSize(), config.alwaysShowGlowing());
         this.excludedTypes = Set.copyOf(excludedTypes);
     }
 

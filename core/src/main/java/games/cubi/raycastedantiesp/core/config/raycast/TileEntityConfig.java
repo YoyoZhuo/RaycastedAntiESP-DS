@@ -14,7 +14,7 @@ public class TileEntityConfig extends RaycastConfig {
     private TileEntityConfig(RaycastConfig config) {
         super(config.enabled(), false, config.getMaxOccludingCount(), config.getAlwaysShowRadius(),
                 config.getRaycastRadius(), config.hideOnSpawnDistance(), config.getVisibleRecheckIntervalTicks(),
-                false, config.getRaycastStepSize());
+                false, config.getRaycastStepSize(), config.alwaysShowGlowing());
     }
 
     public static TileEntityConfig load(ConfigurationNode node, String path) {

@@ -55,6 +55,12 @@ checks:
         raycast-step-size: 1.0
         visible-recheck-interval-ticks: 5  # -1 disables visible rechecks. When set to -1, once an entity is shown by any mechanism, it will be permanently visible.
         keep-client-entity-when-hidden: false
+        # Whether an entity the server has marked as glowing skips the occlusion check entirely. Glow is normally
+        # asked for precisely so something can be seen through walls (spectral arrows, /effect glowing, team
+        # highlighting), so hiding it would defeat whatever requested the outline.
+        # Set to false to occlude glowing entities like any other. Note that this removes the outline as well, not
+        # just the model: a hidden entity is never sent to the client, so there is nothing left for it to draw.
+        always-show-glowing: true
         only-check-sneaking: true
     entity:
         enabled: true
@@ -74,6 +80,12 @@ checks:
         raycast-step-size: 1.0
         visible-recheck-interval-ticks: 5 # -1 disables visible rechecks. When set to -1, once an entity is shown by any mechanism, it will be permanently visible.
         keep-client-entity-when-hidden: false
+        # Whether an entity the server has marked as glowing skips the occlusion check entirely. Glow is normally
+        # asked for precisely so something can be seen through walls (spectral arrows, /effect glowing, team
+        # highlighting), so hiding it would defeat whatever requested the outline.
+        # Set to false to occlude glowing entities like any other. Note that this removes the outline as well, not
+        # just the model: a hidden entity is never sent to the client, so there is nothing left for it to draw.
+        always-show-glowing: true
         excluded-types:
             # Projectiles move very quickly, giving limited time for the raycast engine to process them. This could cause the player not to have enough time to dodge the projectile, so they are always visible by default.
             - minecraft:arrow

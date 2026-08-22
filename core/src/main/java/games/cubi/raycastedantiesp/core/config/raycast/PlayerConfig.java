@@ -17,7 +17,7 @@ public class PlayerConfig extends RaycastConfig {
     private PlayerConfig(RaycastConfig config, boolean onlyCheckSneaking) {
         super(config.enabled(), config.hideSoundsWhenHidden(), config.getMaxOccludingCount(), config.getAlwaysShowRadius(),
                 config.getRaycastRadius(), config.hideOnSpawnDistance(), config.getVisibleRecheckIntervalTicks(),
-                config.keepClientEntityWhenHidden(), config.getRaycastStepSize());
+                config.keepClientEntityWhenHidden(), config.getRaycastStepSize(), config.alwaysShowGlowing());
         this.onlyCheckSneaking = onlyCheckSneaking;
     }
 

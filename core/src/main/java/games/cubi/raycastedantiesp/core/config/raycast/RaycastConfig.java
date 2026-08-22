@@ -28,6 +28,7 @@ public class RaycastConfig implements Config {
     private final short visibleRecheckIntervalTicks;
     private final boolean keepClientEntityWhenHidden;
     private final float raycastStepSize;
+    private final boolean alwaysShowGlowing;
 
     public RaycastConfig(boolean enabled, boolean hideSoundsWhenHidden, int maxOccludingCount, int alwaysShowRadius,
                          int raycastRadius, int hideOnSpawnDistance, int visibleRecheckIntervalTicks) {
@@ -39,12 +40,12 @@ public class RaycastConfig implements Config {
                          int raycastRadius, int hideOnSpawnDistance, int visibleRecheckIntervalTicks,
                          boolean keepClientEntityWhenHidden) {
         this(enabled, hideSoundsWhenHidden, maxOccludingCount, alwaysShowRadius, raycastRadius, hideOnSpawnDistance,
-                visibleRecheckIntervalTicks, keepClientEntityWhenHidden, DEFAULT_STEP_SIZE);
+                visibleRecheckIntervalTicks, keepClientEntityWhenHidden, DEFAULT_STEP_SIZE, true);
     }
 
     public RaycastConfig(boolean enabled, boolean hideSoundsWhenHidden, int maxOccludingCount, int alwaysShowRadius,
                          int raycastRadius, int hideOnSpawnDistance, int visibleRecheckIntervalTicks,
-                         boolean keepClientEntityWhenHidden, double raycastStepSize) {
+                         boolean keepClientEntityWhenHidden, double raycastStepSize, boolean alwaysShowGlowing) {
         this.enabled = enabled;
         this.hideSoundsWhenHidden = hideSoundsWhenHidden;
         this.maxOccludingCount = (byte) maxOccludingCount;
@@ -54,14 +55,21 @@ public class RaycastConfig implements Config {
         this.visibleRecheckIntervalTicks = (short) visibleRecheckIntervalTicks;
         this.keepClientEntityWhenHidden = keepClientEntityWhenHidden;
         this.raycastStepSize = (float) raycastStepSize;
+        this.alwaysShowGlowing = alwaysShowGlowing;
     }
 
     protected static RaycastConfig load(ConfigurationNode node, String path, boolean hasHideSoundsWhenHidden) {
-        return load(node, path, hasHideSoundsWhenHidden, false);
+        // Blocks cannot glow or be kept client-side, so the tile entity check does not read either option.
+        return load(node, path, hasHideSoundsWhenHidden, false, false);
     }
 
     protected static RaycastConfig load(ConfigurationNode node, String path, boolean hasHideSoundsWhenHidden,
                                         boolean hasKeepClientEntityWhenHidden) {
+        return load(node, path, hasHideSoundsWhenHidden, hasKeepClientEntityWhenHidden, true);
+    }
+
+    private static RaycastConfig load(ConfigurationNode node, String path, boolean hasHideSoundsWhenHidden,
+                                      boolean hasKeepClientEntityWhenHidden, boolean hasAlwaysShowGlowing) {
         int maxOccludingCount = ConfigReader.integer(ConfigReader.node(node, "max-occluding-count"), path + ".max-occluding-count");
         if (maxOccludingCount < 0 || maxOccludingCount > Byte.MAX_VALUE) {
             Logger.warning(path + ".max-occluding-count must be between 0 and " + Byte.MAX_VALUE + " but was " + maxOccludingCount +". Defaulting to 3.", 4, RaycastConfig.class);
@@ -102,6 +110,12 @@ public class RaycastConfig implements Config {
                     + " but was " + raycastStepSize + ". Defaulting to " + DEFAULT_STEP_SIZE + ".", 4, RaycastConfig.class);
             raycastStepSize = DEFAULT_STEP_SIZE;
         }
+        // A glowing entity is one the server has told the client to outline through walls, so hiding it would
+        // defeat whatever asked for the outline. Absent means the previous always-show behaviour.
+        ConfigurationNode glowingNode = ConfigReader.node(node, "always-show-glowing");
+        boolean alwaysShowGlowing = !hasAlwaysShowGlowing
+                || glowingNode.virtual() || glowingNode.raw() == null
+                || ConfigReader.bool(glowingNode, path + ".always-show-glowing");
         return new RaycastConfig(
                 ConfigReader.bool(ConfigReader.node(node, "enabled"), path + ".enabled"),
                 hasHideSoundsWhenHidden && ConfigReader.bool(ConfigReader.node(node, "hide-sounds-when-hidden"), path + ".hide-sounds-when-hidden"),
@@ -111,7 +125,8 @@ public class RaycastConfig implements Config {
                 hideOnSpawnDistance,
                 visibleRecheckIntervalTicks,
                 hasKeepClientEntityWhenHidden && ConfigReader.bool(ConfigReader.node(node, "keep-client-entity-when-hidden"), path + ".keep-client-entity-when-hidden"),
-                raycastStepSize
+                raycastStepSize,
+                alwaysShowGlowing
         );
     }
 
@@ -153,5 +168,14 @@ public class RaycastConfig implements Config {
      */
     public float getRaycastStepSize() {
         return raycastStepSize;
+    }
+
+    /**
+     * @return whether an entity the server has marked as glowing skips the occlusion check entirely. Turning this off
+     * hides glowing entities behind cover like any other, which also removes the outline the glow would have drawn,
+     * because a hidden entity is never sent to the client at all.
+     */
+    public boolean alwaysShowGlowing() {
+        return alwaysShowGlowing;
     }
 }

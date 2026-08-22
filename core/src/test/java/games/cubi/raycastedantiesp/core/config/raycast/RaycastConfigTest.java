@@ -105,6 +105,39 @@ class RaycastConfigTest {
         assertEquals(RaycastConfig.DEFAULT_STEP_SIZE, new RaycastConfig(true, true, 3, 8, 48, 24, 5, true).getRaycastStepSize());
     }
 
+    @Test
+    void glowingIsAlwaysShownUnlessTheCheckIsTurnedOff() throws SerializationException {
+        ConfigurationNode node = entityNode(false);
+        node.node("excluded-types").set(java.util.List.of());
+
+        assertTrue(PlayerConfig.load(node, "checks.player").alwaysShowGlowing(), "the default must keep the old behaviour");
+        assertTrue(EntityConfig.load(node, "checks.entity").alwaysShowGlowing());
+
+        node.node("always-show-glowing").set(false);
+
+        assertFalse(PlayerConfig.load(node, "checks.player").alwaysShowGlowing());
+        assertFalse(EntityConfig.load(node, "checks.entity").alwaysShowGlowing());
+    }
+
+    @Test
+    void anAbsentGlowingOptionKeepsTheOldAlwaysShowBehaviour() throws SerializationException {
+        // Config files written before this option existed must still load, and must not start occluding glow.
+        ConfigurationNode node = entityNode(false);
+        node.node("excluded-types").set(java.util.List.of());
+        node.removeChild("always-show-glowing");
+
+        assertTrue(PlayerConfig.load(node, "checks.player").alwaysShowGlowing());
+    }
+
+    @Test
+    void theTileEntityCheckIgnoresTheGlowingOptionEntirely() throws SerializationException {
+        // Blocks cannot glow, so the option is not read for them even when present and disabled.
+        ConfigurationNode node = baseNode();
+        node.node("always-show-glowing").set(false);
+
+        assertTrue(TileEntityConfig.load(node, "checks.tile-entity").alwaysShowGlowing());
+    }
+
     private static ConfigurationNode baseNode() throws SerializationException {
         ConfigurationNode node = BasicConfigurationNode.root();
         node.node("enabled").set(true);
