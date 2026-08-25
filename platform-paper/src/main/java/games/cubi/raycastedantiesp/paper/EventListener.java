@@ -11,6 +11,7 @@ package games.cubi.raycastedantiesp.paper;
 import com.destroystokyo.paper.event.server.ServerTickEndEvent;
 import com.destroystokyo.paper.event.server.ServerTickStartEvent;
 import games.cubi.logs.Logger;
+import games.cubi.raycastedantiesp.paper.config.PaperCheckProfileResolver;
 import games.cubi.raycastedantiesp.core.entity.EntityBypassRegistry;
 import games.cubi.raycastedantiesp.core.config.ConfigManager;
 import games.cubi.raycastedantiesp.core.players.PlayerRegistry;
@@ -79,6 +80,9 @@ public class EventListener extends PaperListener {
 
         boolean hasBypassPermission = player.hasPermission("raycastedantiesp.bypass");
         playerData.setBypassPermission(hasBypassPermission);
+        // Resolved here rather than at login because this is the first point Bukkit can be asked about permissions,
+        // and because the engine can only switch a viewer's profile once their world session is usable.
+        PaperCheckProfileResolver.refresh(player);
         updateOwnLocation(playerData, player.getEyeLocation());
     }
 

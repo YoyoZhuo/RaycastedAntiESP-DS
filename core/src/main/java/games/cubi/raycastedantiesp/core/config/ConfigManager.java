@@ -9,7 +9,9 @@
 package games.cubi.raycastedantiesp.core.config;
 
 import games.cubi.logs.Logger;
+import org.jetbrains.annotations.Nullable;
 import games.cubi.raycastedantiesp.core.config.engine.EngineConfig;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfileSet;
 import games.cubi.raycastedantiesp.core.config.raycast.ChunkSectionConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.EntityConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.PlayerConfig;
@@ -74,6 +76,14 @@ public class ConfigManager {
         if (instance == null) {
             Logger.errorAndReturn(new RuntimeException("ConfigManager accessed before being initiated. Please report this."), 2, ConfigManager.class);
         }
+        return instance;
+    }
+
+    /**
+     * @return the config manager, or null when none has been initialised. Unlike {@link #get()} this does not report
+     * an error, because some core objects are legitimately built before any config exists, most notably in tests.
+     */
+    public static @Nullable ConfigManager getIfInitialised() {
         return instance;
     }
 
@@ -196,6 +206,15 @@ public class ConfigManager {
 
     public ViewerPredictionConfig getViewerPredictionConfig() {
         return activeConfig().checksConfig().viewerPredictionConfig();
+    }
+
+    /**
+     * @return the strictness profiles, already resolved against the global config. Replaced wholesale on reload, so
+     * anything holding a {@link games.cubi.raycastedantiesp.core.config.profiles.CheckProfile} from a previous load
+     * has to be re-resolved rather than left pointing at the old object.
+     */
+    public CheckProfileSet getCheckProfiles() {
+        return activeConfig().checksConfig().checkProfiles();
     }
 
     public DebugConfig getDebugConfig() {

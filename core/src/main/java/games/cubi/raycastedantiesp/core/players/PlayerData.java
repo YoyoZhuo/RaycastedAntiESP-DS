@@ -12,7 +12,9 @@ import games.cubi.locatables.api.Locatable;
 import games.cubi.locatables.implementations.ImmutableLocatableImpl;
 import games.cubi.locatables.implementations.ThreadSafeLocatable;
 import games.cubi.logs.Logger;
+import games.cubi.raycastedantiesp.core.config.ConfigManager;
 import games.cubi.raycastedantiesp.core.config.ViewerPredictionConfig;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfile;
 import games.cubi.raycastedantiesp.core.tracked.NettyEntity;
 import games.cubi.raycastedantiesp.core.utils.VarHandler;
 import games.cubi.raycastedantiesp.core.view.BlockView;
@@ -61,6 +63,10 @@ public class PlayerData {
                 PlayerData.class
         );
         nettyData = new NettyData(selfEntity);
+        // A viewer starts on the global config. The platform resolves their permissions once the client has loaded
+        // its world, which is also the first point at which Bukkit can be asked about permissions at all.
+        ConfigManager config = ConfigManager.getIfInitialised();
+        initialiseCheckProfile(config == null ? null : config.getCheckProfiles().defaultProfile());
     }
 
     public EntityView<?> entityView() {
@@ -181,6 +187,66 @@ public class PlayerData {
                 current.z() + perTickZ * ticksAhead);
     }
 
+    // Read by the engine threads every tick and by the Netty threads on every packet, written by the platform's
+    // permission resolver. Immutable profile objects, so a single volatile write publishes one safely.
+    private volatile CheckProfile checkProfile;
+    private volatile CheckProfile pendingCheckProfile;
+
+    /**
+     * The profile the checks currently run under. Read this once per tick into a local, so one tick cannot act on
+     * half of an old profile and half of a new one.
+     *
+     * @return the profile in force, or null when this viewer was registered before any config existed. Null means
+     * the global config, and only arises outside a running server, because a real viewer cannot connect before the
+     * plugin has loaded its config.
+     */
+    public @Nullable CheckProfile checkProfile() {
+        return checkProfile;
+    }
+
+    /**
+     * The profile the resolver last decided this viewer should have, which is not yet in effect.
+     * <p>
+     * Kept separate from {@link #checkProfile()} because a profile which turns a check off has to reveal whatever
+     * that check already hid <em>before</em> the packet layer stops suppressing packets for it. Otherwise the client
+     * would start receiving movement and metadata for entities it was never sent a spawn packet for. The engine owns
+     * that ordering, since it is the thread which already writes visibility.
+     */
+    public @Nullable CheckProfile pendingCheckProfile() {
+        return pendingCheckProfile;
+    }
+
+    /** @return whether the engine still has to switch this viewer onto {@link #pendingCheckProfile()}. */
+    public boolean hasPendingCheckProfileChange() {
+        return pendingCheckProfile != checkProfile;
+    }
+
+    /**
+     * Records the profile this viewer should move to. Called from the platform's permission resolver, never from a
+     * Netty thread, and never takes effect until the engine has done any revealing the switch requires.
+     */
+    public void setPendingCheckProfile(CheckProfile profile) {
+        pendingCheckProfile = Logger.requireNonNull(profile, "Cannot set a null check profile", 3, PlayerData.class);
+    }
+
+    /**
+     * Moves this viewer onto a profile. Only the engine may call this, and only once it has revealed anything the
+     * outgoing profile hid which the incoming one will no longer recheck.
+     */
+    public void publishCheckProfile(CheckProfile profile) {
+        checkProfile = Logger.requireNonNull(profile, "Cannot publish a null check profile", 3, PlayerData.class);
+    }
+
+    /**
+     * Assigns a profile to both slots at once, skipping the reveal handshake.
+     * <p>
+     * Only safe before the viewer has any hidden state to repair, which means at construction.
+     */
+    private void initialiseCheckProfile(@Nullable CheckProfile profile) {
+        checkProfile = profile;
+        pendingCheckProfile = profile;
+    }
+
     public UUID getPlayerUUID() {
         return playerUUID;
     }
@@ -263,6 +329,7 @@ public class PlayerData {
                 "playerUUID=" + playerUUID +
                 ", joinTick=" + joinTick +
                 ", hasBypassPermission=" + hasBypassPermission() +
+                ", checkProfile=" + (checkProfile == null ? "none" : checkProfile.name()) +
                 ", ownLocation=" + ownLocation +
                 ", blockView=" + blockView +
                 ", entityView=" + entityView +

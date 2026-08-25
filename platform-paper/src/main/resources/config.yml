@@ -37,6 +37,47 @@ checks:
         # How many ticks ahead to extrapolate. Each tick is 50ms and about 0.28 blocks at sprinting speed. Above 2 the
         # straight line assumption stops holding for players who turn, and mispredictions leak more.
         ticks-ahead: 1
+    # Per-player strictness profiles. A player is checked under the highest-priority profile whose permission they
+    # hold, and under the plain checks below this block if they hold none.
+    #
+    # A profile only changes what its holder is shown. It never changes what anyone else sees of that player, so a
+    # loose profile weakens protection for its holder alone and cannot be used to make someone easier to spot.
+    #
+    # Permissions are read when a player's client finishes loading its world, and when someone runs
+    # "/antiesp profile refresh". They are not polled, so granting a permission mid-session needs a refresh before it
+    # takes effect. "/antiesp profile info <player>" shows which profile a player is currently checked under.
+    #
+    # Each profile may override, per check, only these keys:
+    #     enabled, max-occluding-count, always-show-radius, raycast-radius, raycast-step-size
+    # Anything a profile does not mention is inherited from the matching check below, so a profile only has to state
+    # what it changes. The other settings stay server-wide on purpose: options such as hide-on-spawn-distance and
+    # keep-client-entity-when-hidden decide the shape of the packet stream rather than how strictly one viewer is
+    # checked, and excluded-types is resolved once at startup for the whole server.
+    #
+    # "priority" is required. It decides who wins when a player holds more than one profile permission, which is
+    # common with inherited permission groups. Higher wins, and ties break on the profile name.
+    #
+    # Cost scales with what you put in a profile, and only for that profile's holders. Halving raycast-step-size
+    # exactly doubles the work per ray; raising raycast-radius costs more per ray and brings more entities into
+    # range. Turning a check off for a profile is safe at runtime: anything that check had hidden is revealed before
+    # the profile takes effect.
+    profiles:
+        # strict:
+        #     priority: 100
+        #     # Held via the permission raycastedantiesp.profile.strict
+        #     player:
+        #         max-occluding-count: 2
+        #         raycast-step-size: 0.5
+        #     entity:
+        #         max-occluding-count: 2
+        #         raycast-step-size: 0.5
+        # relaxed:
+        #     priority: 10
+        #     # Held via the permission raycastedantiesp.profile.relaxed
+        #     player:
+        #         raycast-radius: 64
+        #     tile-entity:
+        #         enabled: false
     player:
         enabled: true
         hide-sounds-when-hidden: true

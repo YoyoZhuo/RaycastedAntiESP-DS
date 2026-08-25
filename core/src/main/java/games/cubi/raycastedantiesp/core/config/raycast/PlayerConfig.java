@@ -9,6 +9,7 @@
 package games.cubi.raycastedantiesp.core.config.raycast;
 
 import games.cubi.raycastedantiesp.core.config.ConfigReader;
+import games.cubi.raycastedantiesp.core.config.profiles.ProfileOverrides;
 import org.spongepowered.configurate.ConfigurationNode;
 
 public class PlayerConfig extends RaycastConfig {
@@ -26,6 +27,12 @@ public class PlayerConfig extends RaycastConfig {
                 RaycastConfig.load(node, path, true, true),
                 ConfigReader.bool(ConfigReader.node(node, "only-check-sneaking"), path + ".only-check-sneaking")
         );
+    }
+
+    /** @return this config with a profile's overrides applied, or {@code this} when it overrides nothing. */
+    public PlayerConfig withOverrides(ProfileOverrides overrides) {
+        RaycastConfig overridden = applyOverrides(overrides);
+        return overridden == this ? this : new PlayerConfig(overridden, onlyCheckSneaking);
     }
 
     public boolean onlyCheckSneaking() {

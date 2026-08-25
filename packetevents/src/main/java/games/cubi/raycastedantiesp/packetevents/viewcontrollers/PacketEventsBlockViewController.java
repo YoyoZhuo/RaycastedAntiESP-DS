@@ -22,6 +22,7 @@ import games.cubi.locatables.implementations.MutableBlockSpatialImpl;
 import games.cubi.logs.Logger;
 import games.cubi.raycastedantiesp.core.chunks.BlockInfoResolver;
 import games.cubi.raycastedantiesp.core.config.ConfigManager;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfile;
 import games.cubi.raycastedantiesp.core.config.raycast.TileEntityConfig;
 import games.cubi.raycastedantiesp.core.tracked.NettyTileEntity;
 import games.cubi.raycastedantiesp.core.tracked.TrackedTileEntity;
@@ -90,7 +91,12 @@ public abstract class PacketEventsBlockViewController implements PacketListener 
         // applyTileEntityCheckMode below reveals anything already hidden, so unlike entities this can flip per world
         // or per viewer without leaving stale hidden state behind. Bypassing viewers are covered here rather than in
         // the engine, which skips them and so would never reveal a tile entity hidden before the permission was read.
-        boolean tileChecksEnabled = tileEntityConfig.enabled() && WorldCheckRegistry.checksEnabledIn(world)
+        // The enabled flag comes from the viewer's own profile, while hide-on-spawn-distance above stays global.
+        // Flipping it per viewer is safe here in a way it is not for entities, because applyTileEntityCheckMode
+        // reveals what it hid as part of the flip.
+        CheckProfile profile = playerData.checkProfile();
+        boolean tileChecksEnabled = (profile == null ? tileEntityConfig : profile.tileEntityConfig()).enabled()
+                && WorldCheckRegistry.checksEnabledIn(world)
                 && !playerData.hasBypassPermission();
         BlockView blockView = playerData.blockView();
         blockView.applyTileEntityCheckMode(tileChecksEnabled, currentTick,

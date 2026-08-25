@@ -17,6 +17,9 @@ import games.cubi.locatables.implementations.MutableLocatableImpl;
 import games.cubi.locatables.implementations.MutableSpatialImpl;
 import games.cubi.logs.Logger;
 import games.cubi.raycastedantiesp.core.config.ConfigManager;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfile;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfileSet;
+import games.cubi.raycastedantiesp.core.config.raycast.RaycastConfig;
 import games.cubi.raycastedantiesp.core.tracked.TrackedEntity;
 import games.cubi.raycastedantiesp.core.players.PlayerData;
 import games.cubi.raycastedantiesp.core.players.PlayerRegistry;
@@ -25,6 +28,7 @@ import games.cubi.raycastedantiesp.core.view.AbstractBlockView;
 import games.cubi.raycastedantiesp.core.view.EntityView;
 import games.cubi.raycastedantiesp.paper.RaycastedAntiESP;
 import games.cubi.raycastedantiesp.paper.UpdateChecker;
+import games.cubi.raycastedantiesp.paper.config.PaperCheckProfileResolver;
 import games.cubi.raycastedantiesp.paper.packets.PacketEventsPaperBlockInfoResolver;
 
 import games.cubi.raycastedantiesp.paper.utils.PaperScheduler;
@@ -62,6 +66,7 @@ public class RaycastedAntiESPCommand {
         sender.sendRichMessage("<green>/raycastedantiesp set <key> <value> <gray>- Sets a config value");
         sender.sendRichMessage("<green>/raycastedantiesp add <key> <value> <gray>- Adds a value to a list config");
         sender.sendRichMessage("<green>/raycastedantiesp remove <key> <value> <gray>- Removes a value from a list config");
+        sender.sendRichMessage("<green>/raycastedantiesp profile <gray>- Shows and re-resolves per-player strictness profiles");
         sender.sendRichMessage(Attribution.attributionCommandDescription); //Using constant from Attribution class to ensure that it cannot be deleted without the developer noticing that they are obligated to replace it with an equivalent notice.
     }
 
@@ -69,7 +74,12 @@ public class RaycastedAntiESPCommand {
     void reloadCommand(CommandSender sender) {
         try {
             ConfigManager.get().load();
-            sender.sendMessage("[RaycastedAntiESP] Config reloaded.");
+            // A reload rebuilds every profile, so viewers still holding one from the previous load have to be moved
+            // onto the new equivalent or they keep being checked under settings no longer in the file.
+            PaperCheckProfileResolver.syncRegisteredPermissions();
+            int refreshed = PaperCheckProfileResolver.refreshAll(RaycastedAntiESP.get());
+            sender.sendMessage("[RaycastedAntiESP] Config reloaded. Re-resolving check profiles for "
+                    + refreshed + " player(s).");
         } catch (RuntimeException e) {
             sender.sendRichMessage("<red>[RaycastedAntiESP] Config reload rejected: <white>" + e.getMessage());
         }
@@ -127,6 +137,118 @@ public class RaycastedAntiESPCommand {
         sender.sendRichMessage("<white>" + action + " <green>" + value + "<white> for <green>" + key);
         if (result.restartRequired()) {
             sender.sendRichMessage("<yellow>This change was saved but requires a restart: <white>" + result.message());
+        }
+    }
+
+    @Subcommand("profile")
+    static class ProfileCommands {
+
+        @Executes("list")
+        void listCommand(CommandSender sender) {
+            CheckProfileSet profiles = ConfigManager.get().getCheckProfiles();
+            if (profiles.isEmpty()) {
+                sender.sendRichMessage("<yellow>No check profiles are configured, so every player is checked using"
+                        + " the global <white>checks.player<yellow>, <white>checks.entity<yellow> and"
+                        + " <white>checks.tile-entity<yellow> settings.");
+                return;
+            }
+            sender.sendRichMessage("<white>Check profiles, highest priority first:");
+            for (CheckProfile profile : profiles.byPriority()) {
+                sender.sendRichMessage("<green>" + profile.name() + " <gray>priority=<white>" + profile.priority()
+                        + " <gray>permission=<white>" + profile.permission());
+                sendProfileChecks(sender, profile);
+            }
+            sender.sendRichMessage("<green>" + CheckProfile.DEFAULT_NAME
+                    + " <gray>- used by everyone holding none of the above");
+            sendProfileChecks(sender, profiles.defaultProfile());
+        }
+
+        @Executes("info")
+        void infoSelfCommand(Player player) {
+            sendProfileInfo(player, player.getUniqueId(), player.getName());
+        }
+
+        @Executes("info")
+        void infoOtherCommand(@StringArg(StringArgType.STRING) String playerName, CommandSender sender) {
+            Player target = Bukkit.getPlayerExact(playerName);
+            if (target == null) {
+                sender.sendRichMessage("<red>No online player named <white>" + playerName + "<red>.");
+                return;
+            }
+            sendProfileInfo(sender, target.getUniqueId(), target.getName());
+        }
+
+        @Executes("refresh")
+        void refreshAllCommand(CommandSender sender) {
+            int scheduled = PaperCheckProfileResolver.refreshAll(RaycastedAntiESP.get());
+            sender.sendRichMessage("<white>Re-resolving check profiles for <green>" + scheduled + "<white> player(s).");
+            sender.sendRichMessage("<gray>Each switch is applied by the engine on its next tick for that player,"
+                    + " which reveals anything a check being turned off had hidden.");
+        }
+
+        @Executes("refresh")
+        void refreshOneCommand(@StringArg(StringArgType.STRING) String playerName, CommandSender sender) {
+            Player target = Bukkit.getPlayerExact(playerName);
+            if (target == null) {
+                sender.sendRichMessage("<red>No online player named <white>" + playerName + "<red>.");
+                return;
+            }
+            // Resolved on the thread which owns the target, because that is the only one allowed to read their
+            // permissions. Nothing is reported from inside that task: on Folia the sender can belong to a different
+            // region, and messaging them from the target's thread would cross regions.
+            PaperScheduler.runForAudience(RaycastedAntiESP.get(), target, () -> PaperCheckProfileResolver.refresh(target));
+            sender.sendRichMessage("<white>Re-resolving the check profile for <green>" + target.getName() + "<white>.");
+            sender.sendRichMessage("<gray>Run <white>/raycastedantiesp profile info " + target.getName()
+                    + "<gray> to see which profile they ended up on.");
+        }
+
+        private void sendProfileInfo(CommandSender sender, UUID playerUUID, String playerName) {
+            PlayerData playerData = PlayerRegistry.getInstance().getPlayerData(playerUUID);
+            if (playerData == null) {
+                sender.sendRichMessage("<red>No player data is registered for <white>" + playerName + "<red>.");
+                return;
+            }
+            CheckProfile current = playerData.checkProfile();
+            sender.sendRichMessage("<white>Check profile for <green>" + playerName + "<white>:");
+            sender.sendRichMessage("<gray>In force: <green>" + current.name()
+                    + " <gray>priority=<white>" + current.priority());
+            if (playerData.hasPendingCheckProfileChange()) {
+                sender.sendRichMessage("<yellow>Pending: <white>" + playerData.pendingCheckProfile().name()
+                        + "<yellow>, applied on the engine's next tick for this player.");
+            }
+            if (playerData.hasBypassPermission()) {
+                sender.sendRichMessage("<yellow>This player holds raycastedantiesp.bypass, so no check runs for them"
+                        + " regardless of their profile.");
+            }
+            sendProfileChecks(sender, current);
+        }
+
+        private static void sendProfileChecks(CommandSender sender, CheckProfile profile) {
+            sendCheck(sender, "player", profile.playerConfig());
+            sendCheck(sender, "entity", profile.entityConfig());
+            sendCheck(sender, "tile-entity", profile.tileEntityConfig());
+        }
+
+        private static void sendCheck(CommandSender sender, String checkName, RaycastConfig config) {
+            if (!config.enabled()) {
+                sender.sendRichMessage("  <gray>" + checkName + ": <red>disabled");
+                return;
+            }
+            sender.sendRichMessage("  <gray>" + checkName + ": <white>max-occluding=" + config.getMaxOccludingCount()
+                    + " always-show=" + config.getAlwaysShowRadius()
+                    + " radius=" + config.getRaycastRadius()
+                    + " step=" + config.getRaycastStepSize());
+        }
+
+        @DefaultExecutes
+        public void helpCommand(@NotNull CommandSender sender) {
+            sender.sendRichMessage("<white>Per-player strictness profiles. A player is checked under the highest"
+                    + " priority profile whose permission they hold.");
+            sender.sendRichMessage("<green>/raycastedantiesp profile list <gray>- Lists configured profiles and their settings");
+            sender.sendRichMessage("<green>/raycastedantiesp profile info [player] <gray>- Shows which profile a player is checked under");
+            sender.sendRichMessage("<green>/raycastedantiesp profile refresh [player] <gray>- Re-reads profile permissions, for everyone or one player");
+            sender.sendRichMessage("<gray>Profiles are only resolved on join and on refresh, so a permission change"
+                    + " needs a refresh to take effect.");
         }
     }
 

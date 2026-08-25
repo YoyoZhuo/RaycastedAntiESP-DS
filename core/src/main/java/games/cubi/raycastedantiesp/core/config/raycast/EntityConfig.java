@@ -9,15 +9,17 @@
 package games.cubi.raycastedantiesp.core.config.raycast;
 
 import games.cubi.raycastedantiesp.core.config.ConfigReader;
+import games.cubi.raycastedantiesp.core.config.profiles.ProfileOverrides;
 import org.spongepowered.configurate.ConfigurationNode;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
 public class EntityConfig extends RaycastConfig {
     private final Set<String> excludedTypes;
 
-    private EntityConfig(RaycastConfig config, List<String> excludedTypes) {
+    private EntityConfig(RaycastConfig config, Collection<String> excludedTypes) {
         super(config.enabled(), config.hideSoundsWhenHidden(), config.getMaxOccludingCount(), config.getAlwaysShowRadius(),
                 config.getRaycastRadius(), config.hideOnSpawnDistance(), config.getVisibleRecheckIntervalTicks(),
                 config.keepClientEntityWhenHidden(), config.getRaycastStepSize(), config.alwaysShowGlowing());
@@ -28,6 +30,15 @@ public class EntityConfig extends RaycastConfig {
         RaycastConfig config = RaycastConfig.load(node, path, true, true);
         List<String> excludedTypes = ConfigReader.stringList(ConfigReader.node(node, "excluded-types"), path + ".excluded-types");
         return new EntityConfig(config, excludedTypes);
+    }
+
+    /**
+     * @return this config with a profile's overrides applied, or {@code this} when it overrides nothing. The
+     * excluded types are shared rather than overridden, because they are resolved once into a global set.
+     */
+    public EntityConfig withOverrides(ProfileOverrides overrides) {
+        RaycastConfig overridden = applyOverrides(overrides);
+        return overridden == this ? this : new EntityConfig(overridden, excludedTypes);
     }
 
     public Set<String> excludedTypes() {
