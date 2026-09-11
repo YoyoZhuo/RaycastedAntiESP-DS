@@ -134,15 +134,12 @@ public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
      */
     private void recordUnmatchedOverrideNames(Set<String> seenBlockKeys) {
         unmatchedOverrideNames.clear();
-        for (String configured : occlusionPolicy.configuredNames()) {
-            if (!seenBlockKeys.contains(configured)) {
-                unmatchedOverrideNames.add(configured);
-            }
-        }
+        unmatchedOverrideNames.addAll(occlusionPolicy.unmatchedEntries(seenBlockKeys));
         if (!unmatchedOverrideNames.isEmpty()) {
-            Logger.warning("These occlusion override block names matched no block on this server version and were"
+            Logger.warning("These occlusion override entries matched no block on this server version and were"
                     + " ignored: " + String.join(", ", unmatchedOverrideNames)
-                    + ". Names must be namespaced, for example minecraft:oak_stairs.", 3, PacketEventsPaperBlockInfoResolver.class);
+                    + ". Entries are namespaced block names, optionally with * standing for any run of characters,"
+                    + " for example minecraft:oak_stairs or *_stairs.", 3, PacketEventsPaperBlockInfoResolver.class);
         }
     }
 

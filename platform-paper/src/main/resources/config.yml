@@ -217,7 +217,10 @@ block-processor:
         # floor slab or on a staircase can then be hidden from someone who can actually see them. Prefer building
         # cover from full blocks over forcing these on.
         #
-        # Names that match no block on this server version are reported in the console at startup.
+        # An entry is a namespaced block name, and may use * to stand for any run of characters, so '*_stairs'
+        # covers every stairs block including ones later Minecraft versions add. Quote any entry starting with *,
+        # because YAML reads a bare leading * as an anchor reference.
+        # Entries matching no block on this server version are reported in the console at startup.
         always-occluding-blocks: []
         never-occluding-blocks: []
 debug:
