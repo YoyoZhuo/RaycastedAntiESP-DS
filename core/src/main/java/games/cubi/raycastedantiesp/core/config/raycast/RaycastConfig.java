@@ -11,6 +11,7 @@ package games.cubi.raycastedantiesp.core.config.raycast;
 import games.cubi.logs.Logger;
 import games.cubi.raycastedantiesp.core.config.Config;
 import games.cubi.raycastedantiesp.core.config.ConfigReader;
+import games.cubi.raycastedantiesp.core.config.profiles.ProfileOverrides;
 import org.spongepowered.configurate.ConfigurationNode;
 
 public class RaycastConfig implements Config {
@@ -177,5 +178,29 @@ public class RaycastConfig implements Config {
      */
     public boolean alwaysShowGlowing() {
         return alwaysShowGlowing;
+    }
+
+    /**
+     * Applies a profile's overrides on top of these settings.
+     *
+     * @return a config carrying the overridden values, or {@code this} when the profile overrides nothing, so
+     * profiles which only differ for one check still share the inherited config objects for the others.
+     */
+    protected RaycastConfig applyOverrides(ProfileOverrides overrides) {
+        if (overrides.isEmpty()) {
+            return this;
+        }
+        return new RaycastConfig(
+                overrides.enabledOr(enabled),
+                hideSoundsWhenHidden,
+                overrides.maxOccludingCountOr(maxOccludingCount),
+                overrides.alwaysShowRadiusOr(alwaysShowRadius),
+                overrides.raycastRadiusOr(raycastRadius),
+                hideOnSpawnDistance,
+                visibleRecheckIntervalTicks,
+                keepClientEntityWhenHidden,
+                overrides.raycastStepSizeOr(raycastStepSize),
+                alwaysShowGlowing
+        );
     }
 }

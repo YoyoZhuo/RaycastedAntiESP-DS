@@ -14,6 +14,7 @@ import games.cubi.logs.Logger;
 import games.cubi.raycastedantiesp.core.config.ConfigManager;
 import games.cubi.raycastedantiesp.core.config.DebugConfig;
 import games.cubi.raycastedantiesp.core.config.ViewerPredictionConfig;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfile;
 import games.cubi.raycastedantiesp.core.config.raycast.EntityConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.PlayerConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.TileEntityConfig;
@@ -177,9 +178,8 @@ public abstract class AsyncEngine implements Engine {
             claimedRunningTick = true;
             Collection<PlayerData> allPlayers = PlayerRegistry.getInstance().getAllPlayerData();
 
-            EntityConfig entityConfig = config.getEntityConfig();
-            PlayerConfig playerConfig = config.getPlayerConfig();
-            TileEntityConfig tileEntityConfig = config.getTileEntityConfig();
+            // The per-check configs are no longer read here: each viewer carries their own strictness profile, so
+            // they are resolved inside the player loop instead of once for the whole batch.
             ViewerPredictionConfig viewerPredictionConfig = config.getViewerPredictionConfig();
             if (recordTimings) {
                 timings = new TickTimings(scheduledTick, scheduledNanos, currentTick, startNanos, threads, allPlayers.size());
@@ -198,7 +198,7 @@ public abstract class AsyncEngine implements Engine {
             // If only one thread is configured, just use the current async thread to avoid the overhead of scheduling tasks and context switching.
             if (threads == 1) {
                 handedOffToSubTick = true;
-                subTick(new ArrayList<>(allPlayers), entityConfig, playerConfig, tileEntityConfig, viewerPredictionConfig, debugConfig, currentTick, timings, tickTimingStats);
+                subTick(new ArrayList<>(allPlayers), viewerPredictionConfig, debugConfig, currentTick, timings, tickTimingStats);
                 return true;
             }
 
@@ -216,7 +216,7 @@ public abstract class AsyncEngine implements Engine {
             int scheduledBatches = 0;
             try {
                 for (List<PlayerData> batch : batches) {
-                    asyncRunner.runNow(() -> subTick(batch, entityConfig, playerConfig, tileEntityConfig, viewerPredictionConfig, debugConfig, currentTick, tickTimings, tickTimingStats));
+                    asyncRunner.runNow(() -> subTick(batch, viewerPredictionConfig, debugConfig, currentTick, tickTimings, tickTimingStats));
                     scheduledBatches++;
                 }
                 handedOffToSubTick = true;
@@ -248,11 +248,11 @@ public abstract class AsyncEngine implements Engine {
      * @param timingStats the timing sink selected when this tick started, so config changes during
      * worker execution do not split one tick across sinks.
      */
-    private void subTick(List<PlayerData> batch, EntityConfig entityConfig, PlayerConfig playerConfig, TileEntityConfig tileEntityConfig, ViewerPredictionConfig viewerPredictionConfig, DebugConfig debugConfig, int currentTick, TickTimings timings, TimingStats timingStats) {
+    private void subTick(List<PlayerData> batch, ViewerPredictionConfig viewerPredictionConfig, DebugConfig debugConfig, int currentTick, TickTimings timings, TimingStats timingStats) {
         TickTimingBatch batchTimings = timings == null ? TickTimingBatchNoOp.INSTANCE : new TickTimingBatch();
         long batchStartNanos = batchTimings.startBatch();
         try {
-            processTickForPlayers(batch, entityConfig, playerConfig, tileEntityConfig, viewerPredictionConfig, debugConfig.showDebugParticles(), currentTick, batchTimings);
+            processTickForPlayers(batch, viewerPredictionConfig, debugConfig.showDebugParticles(), currentTick, batchTimings);
         }
         finally {
             if (timings != null) {
@@ -333,8 +333,8 @@ public abstract class AsyncEngine implements Engine {
         }
     }
 
-    private void processTickForPlayers(List<PlayerData> playerDataList, EntityConfig entityConfig, PlayerConfig playerConfig, TileEntityConfig tileEntityConfig,
-                                       ViewerPredictionConfig viewerPredictionConfig, boolean debugParticles, int currentTick, TickTimingBatch timings) {
+    private void processTickForPlayers(List<PlayerData> playerDataList, ViewerPredictionConfig viewerPredictionConfig,
+                                       boolean debugParticles, int currentTick, TickTimingBatch timings) {
 
         for (PlayerData playerData : playerDataList) {
             if (!playerData.isConnected()) {
@@ -354,10 +354,20 @@ public abstract class AsyncEngine implements Engine {
                 timings.incrementWorldDisabledSkippedPlayers();
                 continue;
             }
+            // Read once, so this viewer is checked entirely under one profile even if the resolver swaps theirs
+            // partway through the tick.
+            CheckProfile profile = playerData.checkProfile();
+
             int worldEpoch = playerData.tryAcquireWorldEpochFor(playerLocation.world());
             if (worldEpoch == PlayerData.INVALID_WORLD_EPOCH) {
-                if (tileEntityConfig.enabled()) timings.incrementTileWorldSkipped();
+                if (tileEntityConfigFor(profile).enabled()) timings.incrementTileWorldSkipped();
                 continue;
+            }
+            // Needs a stable epoch, because switching profiles can mean revealing what the outgoing profile hid.
+            // A viewer skipped above simply keeps their current profile, which is the safe direction: the profile
+            // still in force is the one whose hiding the views already reflect.
+            if (playerData.hasPendingCheckProfileChange()) {
+                profile = applyPendingCheckProfile(playerData, profile, currentTick, worldEpoch);
             }
             // Checked once a world epoch is available, because a bypassing viewer still has to be repaired: the
             // permission is only read once the client has loaded its world, and entities which spawned before that
@@ -375,6 +385,10 @@ public abstract class AsyncEngine implements Engine {
                             viewerPredictionConfig.minSpeedBlocksPerTick(), viewerPredictionConfig.ticksAhead())
                     : null;
             playerData.recordMovementSample(playerLocation, currentTick);
+
+            EntityConfig entityConfig = entityConfigFor(profile);
+            PlayerConfig playerConfig = playerConfigFor(profile);
+            TileEntityConfig tileEntityConfig = tileEntityConfigFor(profile);
 
             try {
                 if (entityConfig.enabled()) {
@@ -398,6 +412,55 @@ public abstract class AsyncEngine implements Engine {
                 blockView.flushPendingTransitions();
             }
         }
+    }
+
+    /**
+     * Switches a viewer onto the profile the resolver picked for them.
+     * <p>
+     * A check which the incoming profile turns off will never look at what the outgoing one hid, so anything it
+     * hid is revealed first. Only once that is done is the new profile published, because from that moment the
+     * packet layer stops suppressing packets for those entities, and a client which never received a spawn packet
+     * would otherwise start receiving movement and metadata for an entity it does not know about.
+     * <p>
+     * Tile entities need no equivalent here: their check mode is a per-view token which reveals what it hid as part
+     * of flipping, so the packet layer repairs them on its own once the new profile is visible to it.
+     *
+     * @return the profile now in force, which the caller should use for the rest of this tick.
+     */
+    private @Nullable CheckProfile applyPendingCheckProfile(PlayerData player, @Nullable CheckProfile current, int currentTick, int worldEpoch) {
+        CheckProfile pending = player.pendingCheckProfile();
+        if (pending == null || pending == current) {
+            return current;
+        }
+        if (entityConfigFor(current).enabled() && !pending.entityConfig().enabled()) {
+            revealAllHidden(player.entityView(), currentTick, worldEpoch);
+        }
+        if (playerConfigFor(current).enabled() && !pending.playerConfig().enabled()) {
+            revealAllHidden(player.playerView(), currentTick, worldEpoch);
+        }
+        player.publishCheckProfile(pending);
+        // A reload rebuilds every profile object, so viewers are switched onto an equally named replacement. Only
+        // an actual change of profile is worth a line, or a reload would log once per online player.
+        String previousName = current == null ? CheckProfile.DEFAULT_NAME : current.name();
+        if (!previousName.equals(pending.name())) {
+            Logger.info("Viewer " + player.getPlayerUUID() + " moved from check profile " + previousName
+                    + " to " + pending.name() + " on tick " + currentTick, 5, AsyncEngine.class);
+        }
+        return pending;
+    }
+
+    // A null profile means this viewer was registered before any config existed, which only happens outside a
+    // running server. Falling back to the global config keeps that case behaving exactly as it did before profiles.
+    private EntityConfig entityConfigFor(@Nullable CheckProfile profile) {
+        return profile == null ? config.getEntityConfig() : profile.entityConfig();
+    }
+
+    private PlayerConfig playerConfigFor(@Nullable CheckProfile profile) {
+        return profile == null ? config.getPlayerConfig() : profile.playerConfig();
+    }
+
+    private TileEntityConfig tileEntityConfigFor(@Nullable CheckProfile profile) {
+        return profile == null ? config.getTileEntityConfig() : profile.tileEntityConfig();
     }
 
     /**

@@ -10,6 +10,8 @@ package games.cubi.raycastedantiesp.core.view.controller;
 
 import games.cubi.locatables.api.Locatable;
 import games.cubi.logs.Logger;
+import games.cubi.raycastedantiesp.core.config.profiles.CheckProfile;
+import org.jetbrains.annotations.Nullable;
 import games.cubi.raycastedantiesp.core.config.raycast.EntityConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.PlayerConfig;
 import games.cubi.raycastedantiesp.core.config.raycast.RaycastConfig;
@@ -126,7 +128,12 @@ public abstract class PacketEntityViewController<P> {
 
         NettyEntity<?> entity = Logger.requireNonNull(processEntitySpawn(playerData, packet, world, currentTick), "processEntitySpawn returned null", 3, PacketEntityViewController.class);
 
-        boolean checkEnabled = (!isPlayer && entityConfig.enabled()) || isPlayer && playerConfig.enabled();
+        // The viewer's own profile decides whether this check runs for them. hide-on-spawn-distance stays global,
+        // so the distance thresholds cached on this controller are still the right ones to compare against.
+        CheckProfile profile = playerData.checkProfile();
+        boolean checkEnabled = profile == null
+                ? ((!isPlayer && entityConfig.enabled()) || (isPlayer && playerConfig.enabled()))
+                : (isPlayer ? profile.playerConfig().enabled() : profile.entityConfig().enabled());
         // The engine never recomputes visibility for a bypassing viewer, so hiding here would be permanent.
         if (checkEnabled && !playerData.hasBypassPermission() && WorldCheckRegistry.checksEnabledIn(world)) {
             Locatable ownLocation = playerData.ownLocation();
@@ -588,6 +595,28 @@ public abstract class PacketEntityViewController<P> {
         }
     }
 
+    /**
+     * Whether the check which owns this view is switched on for this particular viewer.
+     * <p>
+     * Separate from {@link #getCorrectConfig(EntityView)} because only the enabled flag is per-viewer. The settings
+     * that decide what the client is told, such as keep-client-entity-when-hidden, stay global so that two viewers
+     * can never disagree about the shape of the packet stream for the same entity.
+     *
+     * @param entityView the view the entity is tracked in, or null when it is not tracked, in which case there is
+     * nothing hidden to keep suppressed.
+     */
+    protected boolean checkEnabledForViewer(PlayerData playerData, @Nullable EntityView<?> entityView) {
+        if (entityView == null) {
+            return false;
+        }
+        CheckProfile profile = playerData.checkProfile();
+        if (profile == null) {
+            // No profile resolved, which outside a running server means the global config still applies.
+            return getCorrectConfig(entityView).enabled();
+        }
+        return entityView.isPlayerView() ? profile.playerConfig().enabled() : profile.entityConfig().enabled();
+    }
+
     protected RaycastConfig getCorrectConfig(EntityView<?> entityView) {
         if (entityView.isPlayerView()) {
             return playerConfig;
@@ -614,7 +643,7 @@ public abstract class PacketEntityViewController<P> {
             return false;
         }
 
-        return getCorrectConfig(entityView).enabled(); // If this statement is reached, the entity should be hidden, so if the config is enabled it is hidden.
+        return checkEnabledForViewer(playerData, entityView); // If this statement is reached, the entity should be hidden, so if the check is enabled for this viewer it is hidden.
     }
 
     /**
@@ -628,7 +657,7 @@ public abstract class PacketEntityViewController<P> {
             return false;
         }
 
-        return getCorrectConfig(playerData.viewFromEntityID(entity.entityID())).enabled(); // If this statement is reached, the entity should be hidden, so if the config is enabled it is hidden.
+        return checkEnabledForViewer(playerData, playerData.viewFromEntityID(entity.entityID())); // If this statement is reached, the entity should be hidden, so if the check is enabled for this viewer it is hidden.
     }
 
     /**

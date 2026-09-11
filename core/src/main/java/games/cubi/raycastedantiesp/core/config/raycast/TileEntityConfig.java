@@ -8,6 +8,7 @@
 
 package games.cubi.raycastedantiesp.core.config.raycast;
 
+import games.cubi.raycastedantiesp.core.config.profiles.ProfileOverrides;
 import org.spongepowered.configurate.ConfigurationNode;
 
 public class TileEntityConfig extends RaycastConfig {
@@ -19,5 +20,11 @@ public class TileEntityConfig extends RaycastConfig {
 
     public static TileEntityConfig load(ConfigurationNode node, String path) {
         return new TileEntityConfig(RaycastConfig.load(node, path, false));
+    }
+
+    /** @return this config with a profile's overrides applied, or {@code this} when it overrides nothing. */
+    public TileEntityConfig withOverrides(ProfileOverrides overrides) {
+        RaycastConfig overridden = applyOverrides(overrides);
+        return overridden == this ? this : new TileEntityConfig(overridden);
     }
 }
