@@ -208,6 +208,18 @@ block-processor:
         tile-entity-exempted-ids:
             #- 9779 - Beacon ID on 1.21.11. To see what the beacon ID is for your server version, run the command "/antiesp print-block-ids". This will dump a massive list of all the block ID to block name mappings in the console. Search your logs for "beacon" (or whatever other tile entity you'd like to exempt) and add the associated ID here
         tile-entity-force-included-ids:
+        # Which blocks count as blocking line of sight. A block blocks it when it fills its whole cube, which is why
+        # glass, leaves, stairs, fences, walls and single slabs do not: you can genuinely see past all of them.
+        # Double slabs DO count, even though they share a name with the single ones.
+        #
+        # Use these to override that per block, by namespaced name. Every state of the named block is affected, so
+        # forcing a slab or stair on makes its half-height states block sight too, and a player standing behind a
+        # floor slab or on a staircase can then be hidden from someone who can actually see them. Prefer building
+        # cover from full blocks over forcing these on.
+        #
+        # Names that match no block on this server version are reported in the console at startup.
+        always-occluding-blocks: []
+        never-occluding-blocks: []
 debug:
     info-level: 5
     info-exempted-classes:

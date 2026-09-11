@@ -11,16 +11,20 @@ package games.cubi.raycastedantiesp.paper.packets;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
 import games.cubi.logs.Logger;
 import games.cubi.raycastedantiesp.core.chunks.BlockInfoResolver;
+import games.cubi.raycastedantiesp.core.chunks.OcclusionPolicy;
 import games.cubi.raycastedantiesp.packetevents.config.PacketEventsBlockProcessorConfig;
 import games.cubi.raycastedantiesp.paper.RaycastedAntiESP;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Material;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.Slab;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
     private final boolean[] occlusionArray;
@@ -30,9 +34,18 @@ public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
     private final boolean[] tileEntityArray;
 
     public static PacketEventsPaperBlockInfoResolver get;
+    /** Applies the configured occlusion overrides on top of what Bukkit reports for each block. */
+    private final OcclusionPolicy occlusionPolicy;
+    /** Configured block names which matched no block, reported once the scan knows every name it saw. */
+    private final Set<String> unmatchedOverrideNames = new HashSet<>();
 
     public PacketEventsPaperBlockInfoResolver() {
         get = this;
+        PacketEventsBlockProcessorConfig startupConfig = RaycastedAntiESP.getConfigManager() == null ? null
+                : RaycastedAntiESP.getConfigManager().getExtensionConfig(PacketEventsBlockProcessorConfig.class);
+        occlusionPolicy = startupConfig == null
+                ? new OcclusionPolicy(Set.of(), Set.of())
+                : new OcclusionPolicy(Set.copyOf(startupConfig.alwaysOccludingBlocks()), Set.copyOf(startupConfig.neverOccludingBlocks()));
         boolean[][] result = iterateBlockIDs(false);
         occlusionArray = result[0];
         rawTileEntityArray = result[1];
@@ -60,6 +73,7 @@ public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
         int airs = 0;
         int lastNonAirID = 0;
         Map<Integer, Boolean> occlusion = new HashMap<>(111000); //Tests show 30,000 block IDs in 1.21.11, and we scan forwards for 80k air ids just in case, so 111k is enough. This is a pointless micro optimization but why not
+        Set<String> seenBlockKeys = new HashSet<>();
         Map<Integer, Boolean> tileEntity = new HashMap<>(111000);
         int iterator = 0;
         while (run) {
@@ -84,7 +98,14 @@ public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
                 }
             }
 
-            occlusion.put(iterator, blockData.getMaterial().isOccluding());
+            // Bukkit answers isOccluding for a block's DEFAULT state, but this loop walks every state. A scan of
+            // all 1095 blocks on 1.21.4 found slabs to be the only case where that matters: a double slab fills its
+            // cube and Minecraft treats it as solid, yet the default state is the half slab, so the material-level
+            // answer wrongly reports the whole block as see-through.
+            boolean fullBlockVariant = blockData instanceof Slab slab && slab.getType() == Slab.Type.DOUBLE;
+            String blockKey = blockData.getMaterial().getKey().toString();
+            seenBlockKeys.add(blockKey);
+            occlusion.put(iterator, occlusionPolicy.occludes(blockKey, blockData.getMaterial().isOccluding(), fullBlockVariant));
             try {
                 if (blockData.createBlockState() instanceof TileState) {
                     //Logger.debug("tile at" + iterator + " is tile entity" + material.name());
@@ -98,12 +119,31 @@ public class PacketEventsPaperBlockInfoResolver implements BlockInfoResolver {
             }
             iterator++;
         }
+        recordUnmatchedOverrideNames(seenBlockKeys);
         boolean[][] result = new boolean[2][lastNonAirID + 1];
         for (int i = 0; i < (lastNonAirID + 1) /*Ignore the trailing airs*/; i++) {
             result[0][i] = occlusion.get(i);
             result[1][i] = tileEntity.get(i);
         }
         return result;
+    }
+
+    /**
+     * Remembers configured block names which matched nothing, so a typo is reported rather than silently ignored.
+     * Collected here because only the scan knows which block names actually exist on this server version.
+     */
+    private void recordUnmatchedOverrideNames(Set<String> seenBlockKeys) {
+        unmatchedOverrideNames.clear();
+        for (String configured : occlusionPolicy.configuredNames()) {
+            if (!seenBlockKeys.contains(configured)) {
+                unmatchedOverrideNames.add(configured);
+            }
+        }
+        if (!unmatchedOverrideNames.isEmpty()) {
+            Logger.warning("These occlusion override block names matched no block on this server version and were"
+                    + " ignored: " + String.join(", ", unmatchedOverrideNames)
+                    + ". Names must be namespaced, for example minecraft:oak_stairs.", 3, PacketEventsPaperBlockInfoResolver.class);
+        }
     }
 
     @Override

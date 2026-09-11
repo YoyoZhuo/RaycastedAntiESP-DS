@@ -17,7 +17,8 @@ import org.spongepowered.configurate.ConfigurationNode;
 
 import java.util.List;
 
-public record PacketEventsBlockProcessorConfig(List<Integer> tileEntityExemptedIds, List<Integer> tileEntityForceIncludedIds) implements Config {
+public record PacketEventsBlockProcessorConfig(List<Integer> tileEntityExemptedIds, List<Integer> tileEntityForceIncludedIds,
+                                              List<String> alwaysOccludingBlocks, List<String> neverOccludingBlocks) implements Config {
     public static final ConfigExtension<PacketEventsBlockProcessorConfig> EXTENSION = new ConfigExtension<>() {
         @Override
         public Class<PacketEventsBlockProcessorConfig> type() {
@@ -29,7 +30,9 @@ public record PacketEventsBlockProcessorConfig(List<Integer> tileEntityExemptedI
             ConfigurationNode node = ConfigReader.node(config, "block-processor", "packetevents");
             PacketEventsBlockProcessorConfig packetEventsConfig = new PacketEventsBlockProcessorConfig(
                     ConfigReader.integerList(ConfigReader.node(node, "tile-entity-exempted-ids"), "block-processor.packetevents.tile-entity-exempted-ids"),
-                    ConfigReader.integerList(ConfigReader.node(node, "tile-entity-force-included-ids"), "block-processor.packetevents.tile-entity-force-included-ids")
+                    ConfigReader.integerList(ConfigReader.node(node, "tile-entity-force-included-ids"), "block-processor.packetevents.tile-entity-force-included-ids"),
+                    ConfigReader.stringList(ConfigReader.node(node, "always-occluding-blocks"), "block-processor.packetevents.always-occluding-blocks"),
+                    ConfigReader.stringList(ConfigReader.node(node, "never-occluding-blocks"), "block-processor.packetevents.never-occluding-blocks")
             );
             if (!blockProcessorConfig.trackAllBlocks() && !packetEventsConfig.tileEntityForceIncludedIds().isEmpty()) {
                 throw new ConfigLoadException("block-processor.packetevents.tile-entity-force-included-ids must be empty when block-processor.track-all-blocks is false");
